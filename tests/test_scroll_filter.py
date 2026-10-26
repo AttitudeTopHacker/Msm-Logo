@@ -3,6 +3,9 @@
 import os
 import sys
 import unittest
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
 from PyQt6.QtWidgets import (
     QApplication, QScrollArea, QWidget, QVBoxLayout,
     QComboBox, QSpinBox, QSlider
@@ -16,7 +19,7 @@ class TestScrollProtectorFilter(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         os.environ["QT_QPA_PLATFORM"] = "offscreen"
-        cls.app = QApplication.instance() or QApplication(sys.argv)
+        cls.app = QApplication.instance() or QApplication(sys.argv or ["test_scroll_filter"])
         cls.filter = ScrollProtectorFilter(cls.app)
         cls.app.installEventFilter(cls.filter)
 
