@@ -1,0 +1,9 @@
+project-includes = [
+    "msmlogo/**/*.py",
+    "tests/**/*.py",
+]
+project-excludes = [
+    "build/**",
+    "dist/**",
+    "**/__pycache__/**",
+]

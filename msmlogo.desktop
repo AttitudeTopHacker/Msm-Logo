@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=MsmLogo
+GenericName=Linux Boot Logo Manager & Creator
+Comment=Create, customize and apply Plymouth Boot Logos and GRUB backgrounds
+Exec=/home/salman/StudioProjects/msmlogo/run.sh
+Icon=/home/salman/StudioProjects/msmlogo/assets/icons/app_icon.png
+Terminal=false
+Categories=System;Settings;Utility;
+Keywords=plymouth;boot;logo;grub;splash;initramfs;
+StartupNotify=true
