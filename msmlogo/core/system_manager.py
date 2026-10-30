@@ -105,6 +105,47 @@ class SystemManager:
     BACKUP_FILE = "/etc/msmlogo_backup.json"
 
     @classmethod
+    def get_display_resolution(cls) -> tuple[int, int]:
+        """Detects the native display resolution of the primary connected screen."""
+        # 1. Try QApplication primary screen
+        try:
+            from PyQt6.QtWidgets import QApplication
+            app = QApplication.instance()
+            if app:
+                screen = app.primaryScreen()
+                if screen:
+                    geo = screen.geometry()
+                    if geo.width() > 0 and geo.height() > 0:
+                        return geo.width(), geo.height()
+        except Exception:
+            pass
+
+        # 2. Try xrandr
+        try:
+            out = subprocess.check_output(["xrandr", "--current"], text=True, stderr=subprocess.DEVNULL)
+            for line in out.splitlines():
+                if "*" in line:
+                    m = re.search(r"(\d+)x(\d+)", line)
+                    if m:
+                        return int(m.group(1)), int(m.group(2))
+        except Exception:
+            pass
+
+        # 3. Try /sys/class/drm/*/modes
+        import glob
+        for p in glob.glob("/sys/class/drm/*/modes"):
+            try:
+                with open(p, "r") as f:
+                    line = f.readline().strip()
+                    m = re.search(r"(\d+)x(\d+)", line)
+                    if m:
+                        return int(m.group(1)), int(m.group(2))
+            except Exception:
+                pass
+
+        return 1920, 1080
+
+    @classmethod
     def get_active_theme_path(cls) -> Optional[str]:
         try:
             res = subprocess.run(["update-alternatives", "--query", "default.plymouth"], capture_output=True, text=True, check=True)

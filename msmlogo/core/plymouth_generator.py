@@ -238,6 +238,15 @@ SubTitle=Do not turn off your computer
 screen_w = Window.GetWidth();
 screen_h = Window.GetHeight();
 
+design_w = {width};
+design_h = {height};
+
+# Resolution scaling factor: ensures logo & text size always match design proportions on any monitor/resolution
+scale = screen_h / design_h;
+need_scale = 0;
+if (scale < 0.98) need_scale = 1;
+if (scale > 1.02) need_scale = 1;
+
 # 1. Static Background (Rendered once, zero CPU overhead)
 bg_image = Image("background.png");
 if (bg_image) {{
@@ -248,7 +257,7 @@ if (bg_image) {{
     bg_sprite.SetY(0);
 }}
 
-# 2. Optimized Cropped Animation Frames (Lightweight RAM & instant blit)
+# 2. Optimized Cropped Animation Frames
 frame_count = {total_frames};
 anim_frames = [];
 for (i = 1; i <= frame_count; i++) {{
@@ -256,19 +265,28 @@ for (i = 1; i <= frame_count; i++) {{
     else if (i < 100) num = "00" + i;
     else if (i < 1000) num = "0" + i;
     else num = "" + i;
-    anim_frames[i] = Image("animation-" + num + ".png");
+    raw_img = Image("animation-" + num + ".png");
+    if (raw_img) {{
+        if (need_scale) {{
+            target_w = Math.Int(raw_img.GetWidth() * scale);
+            target_h = Math.Int(raw_img.GetHeight() * scale);
+            anim_frames[i] = raw_img.Scale(target_w, target_h);
+        }} else {{
+            anim_frames[i] = raw_img;
+        }}
+    }}
 }}
 
 anim_sprite = Sprite();
 anim_sprite.SetZ(10);
 
-# Position sprite centered with exact layout offset
+# Position sprite centered with exact resolution-scaled layout offset
 first_frame = anim_frames[1];
 if (first_frame) {{
     frame_w = first_frame.GetWidth();
     frame_h = first_frame.GetHeight();
-    anim_x = (screen_w / 2) - (frame_w / 2) + {offset_x};
-    anim_y = (screen_h / 2) - (frame_h / 2) + {offset_y};
+    anim_x = (screen_w / 2) - (frame_w / 2) + Math.Int({offset_x} * scale);
+    anim_y = (screen_h / 2) - (frame_h / 2) + Math.Int({offset_y} * scale);
     anim_sprite.SetPosition(anim_x, anim_y, 10);
 }}
 

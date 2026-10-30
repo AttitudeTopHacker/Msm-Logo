@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QFileDialog, QColorDialog, QScrollArea, QFrame, QSpinBox
 )
 from ..core.models import ThemeProject, TextItem
+from ..core.system_manager import SystemManager
 
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "assets"))
 SAMPLES_DIR = os.path.join(ASSETS_DIR, "samples")
@@ -61,7 +62,28 @@ class EditorTab(QWidget):
         row = QHBoxLayout()
         row.addWidget(QLabel("Preset Resolution:"))
         self.combo_resolution = QComboBox()
-        self.combo_resolution.addItems(["1080p Full HD (1920x1080) - 16:9", "4K UHD (3840x2160) - 16:9", "720p HD (1280x720) - 16:9", "16:10 Laptop (1920x1200)", "Custom"])
+
+        dw, dh = SystemManager.get_display_resolution()
+        candidates = [
+            (f"Detected Display ({dw}x{dh}) [Recommended]", dw, dh),
+            ("1080p Full HD (1920x1080) - 16:9", 1920, 1080),
+            ("720p HD (1280x720) - 16:9", 1280, 720),
+            ("16:10 Laptop (1920x1200)", 1920, 1200),
+            ("4K UHD (3840x2160) - 16:9", 3840, 2160),
+            ("Custom", None, None),
+        ]
+        seen = set()
+        self.preset_resolutions = []
+        for label, w, h in candidates:
+            if w is not None and (w, h) in seen:
+                continue
+            if w is not None:
+                seen.add((w, h))
+            self.preset_resolutions.append((label, w, h))
+
+        for label, _, _ in self.preset_resolutions:
+            self.combo_resolution.addItem(label)
+
         self.combo_resolution.currentIndexChanged.connect(self._on_resolution_changed)
         row.addWidget(self.combo_resolution, stretch=1)
         layout.addLayout(row)
@@ -248,8 +270,25 @@ class EditorTab(QWidget):
 
     def load_project_values(self):
         # Canvas
+        self.spin_width.blockSignals(True)
+        self.spin_height.blockSignals(True)
         self.spin_width.setValue(self.project.width)
         self.spin_height.setValue(self.project.height)
+        self.spin_width.blockSignals(False)
+        self.spin_height.blockSignals(False)
+
+        matched = False
+        for idx, (_, w, h) in enumerate(self.preset_resolutions):
+            if w == self.project.width and h == self.project.height:
+                self.combo_resolution.blockSignals(True)
+                self.combo_resolution.setCurrentIndex(idx)
+                self.combo_resolution.blockSignals(False)
+                matched = True
+                break
+        if not matched:
+            self.combo_resolution.blockSignals(True)
+            self.combo_resolution.setCurrentIndex(len(self.preset_resolutions) - 1)
+            self.combo_resolution.blockSignals(False)
 
         # Logo
         self.slider_logo_scale.setValue(int(self.project.logo_scale * 100))
@@ -287,15 +326,34 @@ class EditorTab(QWidget):
         btn.setText(hex_color)
 
     def _on_resolution_changed(self, idx: int):
-        resolutions = [(1920, 1080), (3840, 2160), (1280, 720), (1920, 1200)]
-        if idx < len(resolutions):
-            w, h = resolutions[idx]
-            self.spin_width.setValue(w)
-            self.spin_height.setValue(h)
+        if 0 <= idx < len(self.preset_resolutions):
+            _, w, h = self.preset_resolutions[idx]
+            if w is not None and h is not None:
+                self.spin_width.blockSignals(True)
+                self.spin_height.blockSignals(True)
+                self.spin_width.setValue(w)
+                self.spin_height.setValue(h)
+                self.spin_width.blockSignals(False)
+                self.spin_height.blockSignals(False)
+                self.project.width = w
+                self.project.height = h
+                self.project_modified.emit()
 
     def _on_dim_changed(self):
         self.project.width = self.spin_width.value()
         self.project.height = self.spin_height.value()
+        matched = False
+        for idx, (_, w, h) in enumerate(self.preset_resolutions):
+            if w == self.project.width and h == self.project.height:
+                self.combo_resolution.blockSignals(True)
+                self.combo_resolution.setCurrentIndex(idx)
+                self.combo_resolution.blockSignals(False)
+                matched = True
+                break
+        if not matched:
+            self.combo_resolution.blockSignals(True)
+            self.combo_resolution.setCurrentIndex(len(self.preset_resolutions) - 1)
+            self.combo_resolution.blockSignals(False)
         self.project_modified.emit()
 
     def _browse_logo(self):

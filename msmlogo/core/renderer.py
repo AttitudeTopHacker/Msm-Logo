@@ -220,14 +220,14 @@ class BootRenderer:
         result.alpha_composite(shimmer_layer)
         return result
 
-    def _apply_glow(self, logo: Image.Image, progress: float, config: EffectConfig) -> Image.Image:
+    def _apply_glow(self, logo: Image.Image, progress: float, config: EffectConfig, scale: float = 1.0) -> Image.Image:
         """Creates a breathing radiant glow behind the logo."""
         if not config.glow_pulse_enabled:
             return logo
 
         w, h = logo.size
         glow_rgb = self._hex_to_rgb(config.glow_color)
-        radius = max(2, config.glow_radius)
+        radius = max(2, int(config.glow_radius * scale))
 
         # Breathing pulse oscillation
         pulse = 0.5 * (1.0 + math.sin(2.0 * math.pi * progress - math.pi / 2.0))
@@ -254,12 +254,12 @@ class BootRenderer:
         comp.paste(logo, (pad, pad), logo)
         return comp
 
-    def _draw_spinner(self, draw: ImageDraw.ImageDraw, cx: int, cy: int, progress: float, config: EffectConfig):
+    def _draw_spinner(self, draw: ImageDraw.ImageDraw, cx: int, cy: int, progress: float, config: EffectConfig, scale: float = 1.0):
         """Draws a smooth circular Linux boot throbber/spinner."""
         if not config.spinner_enabled or config.spinner_type == "none":
             return
 
-        size = max(16, config.spinner_size)
+        size = max(16, int(config.spinner_size * scale))
         half_s = size // 2
         bbox = [cx - half_s, cy - half_s, cx + half_s, cy + half_s]
         rot = (progress * 360.0 * config.spinner_speed_mult) % 360.0
@@ -298,15 +298,15 @@ class BootRenderer:
                 dot_r = max(2, stroke // 2 + (i // 3))
                 draw.ellipse([dot_x - dot_r, dot_y - dot_r, dot_x + dot_r, dot_y + dot_r], fill=(c1[0], c1[1], c1[2], dot_alpha))
 
-    def _render_text(self, canvas: Image.Image, cx: int, cy: int, text_item: TextItem, progress: float):
+    def _render_text(self, canvas: Image.Image, cx: int, cy: int, text_item: TextItem, progress: float, scale: float = 1.0):
         """Renders styled text with optional font loading, drop shadow, and glow."""
         if not text_item.text.strip():
             return
 
-        tx = cx + text_item.offset_x
-        ty = cy + text_item.offset_y
+        tx = cx + int(text_item.offset_x * scale)
+        ty = cy + int(text_item.offset_y * scale)
 
-        font_size = max(10, text_item.font_size)
+        font_size = max(8, int(text_item.font_size * scale))
         
         # Try loading font or fallback
         font = None
@@ -339,14 +339,16 @@ class BootRenderer:
         if text_item.glow_enabled:
             glow_rgb = self._hex_to_rgb(text_item.glow_color)
             # Create text mask for shadow
-            text_mask = Image.new("L", (int(tw + 40), int(th + 40)), 0)
+            blur_r = max(1, int(6 * scale))
+            pad = max(8, int(20 * scale))
+            text_mask = Image.new("L", (int(tw + pad * 2), int(th + pad * 2)), 0)
             t_draw = ImageDraw.Draw(text_mask)
-            t_draw.text((20, 20), text_item.text, font=font, fill=255)
+            t_draw.text((pad, pad), text_item.text, font=font, fill=255)
             
-            glow_blur = text_mask.filter(ImageFilter.GaussianBlur(6))
-            glow_layer = Image.new("RGBA", (int(tw + 40), int(th + 40)), (glow_rgb[0], glow_rgb[1], glow_rgb[2], 0))
+            glow_blur = text_mask.filter(ImageFilter.GaussianBlur(blur_r))
+            glow_layer = Image.new("RGBA", (int(tw + pad * 2), int(th + pad * 2)), (glow_rgb[0], glow_rgb[1], glow_rgb[2], 0))
             glow_layer.putalpha(glow_blur)
-            canvas.alpha_composite(glow_layer, (int(x - 20), int(y - 20)))
+            canvas.alpha_composite(glow_layer, (int(x - pad), int(y - pad)))
 
         # Main text color
         text_rgb = self._hex_to_rgb(text_item.color)
@@ -362,6 +364,7 @@ class BootRenderer:
 
         total_f = max(1, self.project.total_frames)
         progress = (frame_index % total_f) / float(total_f)
+        scale = h / float(self.project.height) if self.project.height > 0 else 1.0
 
         # 1. Background
         frame = self.get_background(w, h)
@@ -387,11 +390,11 @@ class BootRenderer:
         logo = self._apply_shimmer(logo, progress, cfg)
 
         # Pulse Glow effect
-        logo_glow_comp = self._apply_glow(logo, progress, cfg)
+        logo_glow_comp = self._apply_glow(logo, progress, cfg, scale)
 
         # Position logo center
-        cx = (w // 2) + self.project.logo_offset_x
-        cy = (h // 2) + self.project.logo_offset_y
+        cx = (w // 2) + int(self.project.logo_offset_x * scale)
+        cy = (h // 2) + int(self.project.logo_offset_y * scale)
 
         lw, lh = logo_glow_comp.size
         lx = cx - lw // 2
@@ -402,13 +405,13 @@ class BootRenderer:
 
         # 3. Texts
         for text_item in self.project.texts:
-            self._render_text(frame, cx, cy, text_item, progress)
+            self._render_text(frame, cx, cy, text_item, progress, scale)
 
         # 4. Spinner / Throbber
         draw = ImageDraw.Draw(frame)
-        spinner_cx = cx + cfg.spinner_offset_x
-        spinner_cy = cy + cfg.spinner_offset_y
-        self._draw_spinner(draw, spinner_cx, spinner_cy, progress, cfg)
+        spinner_cx = cx + int(cfg.spinner_offset_x * scale)
+        spinner_cy = cy + int(cfg.spinner_offset_y * scale)
+        self._draw_spinner(draw, spinner_cx, spinner_cy, progress, cfg, scale)
 
         # 5. Global Fade In / Out
         if cfg.fade_in or cfg.fade_out:
@@ -430,6 +433,7 @@ class BootRenderer:
         """Renders only the foreground animated elements (logo, shimmer, glow, text, spinner) on a transparent canvas."""
         w = render_width or self.project.width
         h = render_height or self.project.height
+        scale = h / float(self.project.height) if self.project.height > 0 else 1.0
         total_f = max(1, self.project.total_frames)
         progress = (frame_index % total_f) / float(total_f)
 
@@ -451,10 +455,10 @@ class BootRenderer:
             logo = logo.resize((nw, nh), Image.Resampling.BILINEAR)
 
         logo = self._apply_shimmer(logo, progress, cfg)
-        logo_glow_comp = self._apply_glow(logo, progress, cfg)
+        logo_glow_comp = self._apply_glow(logo, progress, cfg, scale)
 
-        cx = (w // 2) + self.project.logo_offset_x
-        cy = (h // 2) + self.project.logo_offset_y
+        cx = (w // 2) + int(self.project.logo_offset_x * scale)
+        cy = (h // 2) + int(self.project.logo_offset_y * scale)
 
         lw, lh = logo_glow_comp.size
         lx = cx - lw // 2
@@ -463,12 +467,12 @@ class BootRenderer:
         frame.alpha_composite(logo_glow_comp, (lx, ly))
 
         for text_item in self.project.texts:
-            self._render_text(frame, cx, cy, text_item, progress)
+            self._render_text(frame, cx, cy, text_item, progress, scale)
 
         draw = ImageDraw.Draw(frame)
-        spinner_cx = cx + cfg.spinner_offset_x
-        spinner_cy = cy + cfg.spinner_offset_y
-        self._draw_spinner(draw, spinner_cx, spinner_cy, progress, cfg)
+        spinner_cx = cx + int(cfg.spinner_offset_x * scale)
+        spinner_cy = cy + int(cfg.spinner_offset_y * scale)
+        self._draw_spinner(draw, spinner_cx, spinner_cy, progress, cfg, scale)
 
         return frame
 
@@ -506,13 +510,14 @@ class BootRenderer:
         """Renders static emblem (logo + text) with transparent background and cropped to its bounding box."""
         w = render_width or self.project.width
         h = render_height or self.project.height
+        scale = h / float(self.project.height) if self.project.height > 0 else 1.0
         canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
 
         target_logo_dim = int(h * self.project.logo_scale)
         logo = self.get_raw_logo(target_logo_dim)
 
-        cx = (w // 2) + self.project.logo_offset_x
-        cy = (h // 2) + self.project.logo_offset_y
+        cx = (w // 2) + int(self.project.logo_offset_x * scale)
+        cy = (h // 2) + int(self.project.logo_offset_y * scale)
 
         lw, lh = logo.size
         lx = cx - lw // 2
@@ -521,11 +526,11 @@ class BootRenderer:
         canvas.alpha_composite(logo, (lx, ly))
 
         for text_item in self.project.texts:
-            self._render_text(canvas, cx, cy, text_item, 0.0)
+            self._render_text(canvas, cx, cy, text_item, 0.0, scale)
 
         bbox = canvas.getbbox()
         if bbox:
-            pad = 8
+            pad = max(4, int(8 * scale))
             bx0 = max(0, bbox[0] - pad)
             by0 = max(0, bbox[1] - pad)
             bx1 = min(w, bbox[2] + pad)

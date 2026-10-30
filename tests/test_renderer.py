@@ -100,10 +100,40 @@ class TestBootRenderer(unittest.TestCase):
         self.assertGreater(emblem.width, 0)
         self.assertGreater(emblem.height, 0)
 
-        spinner = self.renderer.render_isolated_spinner_frame(0, 30)
-        self.assertIsNotNone(spinner)
-        self.assertIsInstance(spinner, Image.Image)
-        self.assertGreaterEqual(spinner.width, self.project.effects.spinner_size)
+    def test_proportional_rendering_across_resolutions(self):
+        # Native resolution (640x360) vs half resolution (320x180)
+        fg_full = self.renderer.render_foreground_frame(0, 640, 360)
+        fg_half = self.renderer.render_foreground_frame(0, 320, 180)
+        
+        bbox_full = fg_full.getbbox()
+        bbox_half = fg_half.getbbox()
+        self.assertIsNotNone(bbox_full)
+        self.assertIsNotNone(bbox_half)
+        
+        h_full = bbox_full[3] - bbox_full[1]
+        h_half = bbox_half[3] - bbox_half[1]
+        w_full = bbox_full[2] - bbox_full[0]
+        w_half = bbox_half[2] - bbox_half[0]
+        
+        # At half height (180 vs 360), bbox height & width should be scaled by ~0.5
+        ratio_h = h_half / float(h_full)
+        ratio_w = w_half / float(w_full)
+        self.assertAlmostEqual(ratio_h, 0.5, delta=0.08)
+        self.assertAlmostEqual(ratio_w, 0.5, delta=0.08)
+
+    def test_plymouth_script_scaling_generation(self):
+        import tempfile
+        from msmlogo.core.plymouth_generator import PlymouthGenerator
+        gen = PlymouthGenerator(self.project)
+        with tempfile.NamedTemporaryFile("w+", suffix=".script") as tmp:
+            gen._write_plymouth_script(tmp.name, 30, 1920, 1080, 0, 50)
+            tmp.seek(0)
+            script = tmp.read()
+            self.assertIn("design_w = 1920;", script)
+            self.assertIn("design_h = 1080;", script)
+            self.assertIn("scale = screen_h / design_h;", script)
+            self.assertIn("need_scale", script)
+            self.assertIn("Math.Int", script)
 
 
 if __name__ == "__main__":

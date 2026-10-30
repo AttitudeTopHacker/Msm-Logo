@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="msmlogo",
-    version="1.0.0",
+    version="1.0.1",
     description="A lightweight and user-friendly GUI tool to create, customize and 1-Click apply Plymouth Boot Logos and GRUB backgrounds on Linux.",
     author="MsmLogo Team",
     packages=find_packages(),
